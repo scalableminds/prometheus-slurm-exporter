@@ -13,16 +13,15 @@ GNU General Public License for more details.
 You should have received a copy of the GNU General Public License
 along with this program.  If not, see <http://www.gnu.org/licenses/>. */
 
-
 package main
 
 import (
-	"os/exec"
 	"encoding/json"
-	"log"
 	"fmt"
-	"io/ioutil"
 	"github.com/prometheus/client_golang/prometheus"
+	"github.com/prometheus/common/log"
+	"io/ioutil"
+	"os/exec"
 )
 
 func JobsData() []byte {
@@ -42,34 +41,38 @@ func JobsData() []byte {
 }
 
 type SqueueResult struct {
-	jobs []SqueueJob
+	Jobs []SqueueJob `json:"jobs"`
 }
 
 type SqueueJob struct {
-	account string
-	id int `json:"job_id"`
-	name string
-	resources SqueueJobResources `json:"job_resources"`
-	state []string `json:"job_state"`
-	nodes string
-	partition string
-	groupId int `json:"group_id"`
-	groupName string `json:"group_name"`
-	userId int `json:"user_id"`
-	userName string `json:"user_name"`
-	memoryPerNode SqeueueMemoryPerNode `json:"memory_per_node"`
+	Account   string             `json:"acccount"`
+	Id        int                `json:"job_id"`
+	Name      string             `json:"name"`
+	Resources SqueueJobResources `json:"job_resources"`
+	State     []string           `json:"job_state"`
+	Nodes     string             `json:"nodes"`
+	Partition string             `json:"partition"`
+	GroupId   int                `json:"group_id"`
+	GroupName string             `json:"group_name"`
+	UserId    int                `json:"user_id"`
+	UserName  string             `json:"user_name"`
 }
 
 type SqueueJobResources struct {
-	cpus int
+	Cpus  int `json:"cpus"`
+	Nodes struct {
+		Allocation []SqueueJobResourcesAllocation `json:"allocation"`
+	} `json:"nodes"`
 }
 
-type SqeueueMemoryPerNode struct {
-	number int
+type SqueueJobResourcesAllocation struct {
+	Memory struct {
+		Allocated int `json:"allocated"`
+	} `json:"memory"`
 }
 
 func InstrumentJobs() SqueueResult {
-	jobs := JobsData();
+	jobs := JobsData()
 	var result SqueueResult
 	if err := json.Unmarshal(jobs, &result); err != nil {
 		log.Fatal(err)
@@ -82,12 +85,12 @@ type JobsCollector struct {
 }
 
 func NewJobsCollector() *JobsCollector {
-	labels := []string {
+	labels := []string{
 		"account",
 		"job_id",
 		"name",
 		"cpus",
-		"memory_per_node",
+		"memory",
 		"state",
 		"nodes",
 		"partition",
@@ -95,8 +98,8 @@ func NewJobsCollector() *JobsCollector {
 		"group_name",
 		"user_id",
 		"user_name",
-	};
-	return &JobsCollector {
+	}
+	return &JobsCollector{
 		jobs: prometheus.NewDesc("slurm_jobs", "Description of running Slurm jobs", labels, nil),
 	}
 }
@@ -107,20 +110,24 @@ func (jc *JobsCollector) Describe(ch chan<- *prometheus.Desc) {
 
 func (jc *JobsCollector) Collect(ch chan<- prometheus.Metric) {
 	jm := InstrumentJobs()
-	for _, job := range jm.jobs {
+	for _, job := range jm.Jobs {
+		allocatedMemory := 0
+		for _, allocation := range job.Resources.Nodes.Allocation {
+			allocatedMemory += allocation.Memory.Allocated
+		}
 		labels := []string{
-			job.account,
-			fmt.Sprintf("%s", job.id),
-			job.name,
-			fmt.Sprintf("%s", job.resources.cpus),
-			fmt.Sprintf("%s", job.memoryPerNode.number),
-			fmt.Sprintf("%s", job.state),
-			job.nodes,
-			job.partition,
-			fmt.Sprintf("%d", job.groupId),
-			job.groupName,
-			fmt.Sprintf("%d", job.userId),
-			job.userName,
+			job.Account,
+			fmt.Sprintf("%d", job.Id),
+			job.Name,
+			fmt.Sprintf("%d", job.Resources.Cpus),
+			fmt.Sprintf("%d", allocatedMemory),
+			fmt.Sprintf("%s", job.State),
+			job.Nodes,
+			job.Partition,
+			fmt.Sprintf("%d", job.GroupId),
+			job.GroupName,
+			fmt.Sprintf("%d", job.UserId),
+			job.UserName,
 		}
 		ch <- prometheus.MustNewConstMetric(jc.jobs, prometheus.GaugeValue, 1.0, labels...)
 	}

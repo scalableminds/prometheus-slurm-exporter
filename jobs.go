@@ -45,7 +45,7 @@ type SqueueResult struct {
 }
 
 type SqueueJob struct {
-	Account   string             `json:"acccount"`
+	Account   string             `json:"account"`
 	Id        int                `json:"job_id"`
 	Name      string             `json:"name"`
 	Resources SqueueJobResources `json:"job_resources"`
